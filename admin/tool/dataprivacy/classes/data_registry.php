@@ -32,8 +32,6 @@ use core\persistent;
 
 defined('MOODLE_INTERNAL') || die();
 
-require_once($CFG->libdir . '/coursecatlib.php');
-
 /**
  * Data registry business logic methods. Mostly internal stuff.
  *
@@ -82,12 +80,12 @@ class data_registry {
         if (!empty($pluginname)) {
             list($purposevar, $categoryvar) = self::var_names_from_context($classname);
             // If the plugin-level doesn't have a default purpose set, try the context level.
-            if ($purposeid === false) {
+            if ($purposeid == false) {
                 $purposeid = get_config('tool_dataprivacy', $purposevar);
             }
 
             // If the plugin-level doesn't have a default category set, try the context level.
-            if ($categoryid === false) {
+            if ($categoryid == false) {
                 $categoryid = get_config('tool_dataprivacy', $categoryvar);
             }
         }
@@ -120,17 +118,17 @@ class data_registry {
     /**
      * Returns all site categories that are visible to the current user.
      *
-     * @return \coursecat[]
+     * @return \core_course_category[]
      */
     public static function get_site_categories() {
         global $DB;
 
-        if (method_exists('\coursecat', 'get_all')) {
-            $categories = \coursecat::get_all(['returnhidden' => true]);
+        if (method_exists('\core_course_category', 'get_all')) {
+            $categories = \core_course_category::get_all(['returnhidden' => true]);
         } else {
             // Fallback (to be removed once this gets integrated into master).
             $ids = $DB->get_fieldset_select('course_categories', 'id', '');
-            $categories = \coursecat::get_many($ids);
+            $categories = \core_course_category::get_many($ids);
         }
 
         foreach ($categories as $key => $category) {
@@ -154,8 +152,8 @@ class data_registry {
 
         if ($contextcourse = $context->get_course_context(false)) {
             // Below course level we look at module or block level roles + course-assigned roles.
-            $courseroles = get_roles_with_assignment_on_context($contextcourse);
-            $roles = $courseroles + get_roles_with_assignment_on_context($context);
+            $courseroles = get_roles_used_in_context($contextcourse, false);
+            $roles = $courseroles + get_roles_used_in_context($context, false);
         } else {
             // We list category + system for others (we don't work with user instances so no need to work about them).
             $roles = get_roles_used_in_context($context);
@@ -186,11 +184,11 @@ class data_registry {
         }
         $fieldname = $element . 'id';
 
-        if (!empty($forcedvalue) && ($forcedvalue === context_instance::INHERIT)) {
+        if (!empty($forcedvalue) && ($forcedvalue == context_instance::INHERIT)) {
             // Do not include the current context when calculating the value.
             // This has the effect that an inheritted value is calculated.
             $parentcontextids = $context->get_parent_context_ids(false);
-        } else if (!empty($forcedvalue) && ($forcedvalue !== context_instance::NOTSET)) {
+        } else if (!empty($forcedvalue) && ($forcedvalue != context_instance::NOTSET)) {
             return self::get_element_instance($element, $forcedvalue);
         } else {
             // Fetch all parent contexts, including self.
@@ -239,7 +237,7 @@ class data_registry {
                 $checkcontextlevel = true;
             }
 
-            if (!empty($forcedvalue) && context_instance::NOTSET === $forcedvalue) {
+            if (!empty($forcedvalue) && context_instance::NOTSET == $forcedvalue) {
                 $checkcontextlevel = true;
             }
 
@@ -251,7 +249,7 @@ class data_registry {
 
                 $instancevalue = $$fieldname;
 
-                if (context_instance::NOTSET !== $instancevalue && context_instance::INHERIT !== $instancevalue) {
+                if (context_instance::NOTSET != $instancevalue && context_instance::INHERIT != $instancevalue) {
                     // There is an actual value. Return it.
                     return self::get_element_instance($element, $instancevalue);
                 }
@@ -292,7 +290,7 @@ class data_registry {
         list($purposeid, $categoryid) = self::get_effective_default_contextlevel_purpose_and_category($contextlevel);
 
         // Note: The $$fieldname points to either $purposeid, or $categoryid.
-        if (context_instance::NOTSET !== $$fieldname && context_instance::INHERIT !== $$fieldname) {
+        if (context_instance::NOTSET != $$fieldname && context_instance::INHERIT != $$fieldname) {
             // There is a specific value set.
             return self::get_element_instance($element, $$fieldname);
         }
@@ -327,7 +325,7 @@ class data_registry {
             list($parentpurposeid, $parentcategoryid) = self::get_defaults(CONTEXT_SYSTEM);
 
             if (context_instance::INHERIT == $purposeid || context_instance::NOTSET == $purposeid) {
-                $purposeid = $parentpurposeid;
+                $purposeid = (int)$parentpurposeid;
             }
 
             if (context_instance::INHERIT == $categoryid || context_instance::NOTSET == $categoryid) {

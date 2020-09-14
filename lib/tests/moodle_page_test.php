@@ -311,6 +311,14 @@ class core_moodle_page_testcase extends advanced_testcase {
         $this->testpage->set_heading('a heading');
         // Validated.
         $this->assertSame('a heading', $this->testpage->heading);
+
+        // By default formatting is applied and tags are removed.
+        $this->testpage->set_heading('a heading <a href="#">edit</a><p>');
+        $this->assertSame('a heading edit', $this->testpage->heading);
+
+        // Without formatting the tags are preserved but cleaned.
+        $this->testpage->set_heading('a heading <a href="#">edit</a><p>', false);
+        $this->assertSame('a heading <a href="#">edit</a><p></p>', $this->testpage->heading);
     }
 
     public function test_set_title() {
@@ -733,41 +741,41 @@ class core_moodle_page_testcase extends advanced_testcase {
                 'usertheme' => '',
                 'sitetheme' => 'boost',
                 'cohorts' => [
-                    'clean',
+                    'classic',
                 ],
-                'expected' => 'clean',
+                'expected' => 'classic',
             ],
             'User member of one cohort which has a theme set, and one without a theme' => [
                 'usertheme' => '',
                 'sitetheme' => 'boost',
                 'cohorts' => [
-                    'clean',
+                    'classic',
                     '',
                 ],
-                'expected' => 'clean',
+                'expected' => 'classic',
             ],
             'User member of one cohort which has a theme set, and one with a different theme' => [
                 'usertheme' => '',
                 'sitetheme' => 'boost',
                 'cohorts' => [
-                    'clean',
+                    'classic',
                     'someother',
                 ],
                 'expected' => 'boost',
             ],
             'User with a theme but not a member of any cohort' => [
-                'usertheme' => 'more',
+                'usertheme' => 'classic',
                 'sitetheme' => 'boost',
                 'cohorts' => [],
-                'expected' => 'more',
+                'expected' => 'classic',
             ],
             'User with a theme and member of one cohort which has a theme set' => [
-                'usertheme' => 'more',
+                'usertheme' => 'classic',
                 'sitetheme' => 'boost',
                 'cohorts' => [
-                    'clean',
+                    'boost',
                 ],
-                'expected' => 'more',
+                'expected' => 'classic',
             ],
         ];
     }

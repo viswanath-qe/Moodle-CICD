@@ -45,7 +45,9 @@ class provider implements
         \core_privacy\local\request\plugin\provider,
         \core_privacy\local\request\core_userlist_provider,
         // The portfolio subsystem will be called by other components.
-        \core_privacy\local\request\subsystem\plugin_provider {
+        \core_privacy\local\request\subsystem\plugin_provider,
+
+        \core_privacy\local\request\shared_userlist_provider {
 
     /**
      * Returns meta data about this system.
@@ -111,27 +113,16 @@ class provider implements
             return;
         }
 
-        $params = [
-            'contextid' => $context->id,
-            'contextuser' => CONTEXT_USER,
-        ];
+        $params = [$context->instanceid];
 
-        $sql = "SELECT ctx.instanceid as userid
-                  FROM {portfolio_instance_user} piu
-                  JOIN {context} ctx
-                       ON ctx.instanceid = piu.userid
-                       AND ctx.contextlevel = :contextuser
-                 WHERE ctx.id = :contextid";
-
+        $sql = "SELECT userid
+                  FROM {portfolio_instance_user}
+                 WHERE userid = ?";
         $userlist->add_from_sql('userid', $sql, $params);
 
-        $sql = "SELECT ctx.instanceid as userid
-                  FROM {portfolio_log} pl
-                  JOIN {context} ctx
-                       ON ctx.instanceid = pl.userid
-                       AND ctx.contextlevel = :contextuser
-                  WHERE ctx.id = :contextid";
-
+        $sql = "SELECT userid
+                  FROM {portfolio_log}
+                  WHERE userid = ?";
         $userlist->add_from_sql('userid', $sql, $params);
     }
 

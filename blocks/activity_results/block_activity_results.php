@@ -201,16 +201,12 @@ class block_activity_results extends block_base {
             return $this->content;
         }
 
-        // IOMAD - Get the user's company details.
-        $companyid = iomad::get_my_companyid(context_system::instance(), false);
-        $company = new company($companyid);
         // Get the grades for this activity.
         $sql = 'SELECT * FROM {grade_grades}
                  WHERE itemid = ? AND finalgrade is not NULL
-                 AND userid IN (SELECT userid FROM {company_users} WHERE companyid = ?)
                  ORDER BY finalgrade, timemodified DESC';
 
-        $grades = $DB->get_records_sql($sql, array( $activitygradeitemid, $company->id));
+        $grades = $DB->get_records_sql($sql, array( $activitygradeitemid));
 
         if (empty($grades) || $activity->hidden) {
             // No grades available, The block will hide itself in this case.
@@ -268,13 +264,11 @@ class block_activity_results extends block_base {
                 // Now find which groups these users belong in.
                 list($usertest, $params) = $DB->get_in_or_equal($userids);
                 $params[] = $courseid;
-                $params[] = $company->id;
                 $usergroups = $DB->get_records_sql('
                         SELECT gm.id, gm.userid, gm.groupid, g.name
                         FROM {groups} g
                         LEFT JOIN {groups_members} gm ON g.id = gm.groupid
-                        WHERE gm.userid ' . $usertest . ' AND g.courseid = ?
-                        AND gm.userid IN (SELECT userid FROM {company_users} WHERE companyid = ?', $params);
+                        WHERE gm.userid ' . $usertest . ' AND g.courseid = ?', $params);
 
                 // Now, iterate the grades again and sum them up for each group.
                 $groupgrades = array();
@@ -348,13 +342,13 @@ class block_activity_results extends block_base {
 
                 $rank = 0;
                 if (!empty($best)) {
-                    $this->content->text .= '<table class="grades"><caption>';
+                    $this->content->text .= '<table class="grades"><caption class="pb-0"><h6>';
                     if ($numbest == 1) {
                         $this->content->text .= get_string('bestgroupgrade', 'block_activity_results');
                     } else {
                         $this->content->text .= get_string('bestgroupgrades', 'block_activity_results', $numbest);
                     }
-                    $this->content->text .= '</caption><colgroup class="number" />';
+                    $this->content->text .= '</h6></caption><colgroup class="number" />';
                     $this->content->text .= '<colgroup class="name" /><colgroup class="grade" /><tbody>';
                     foreach ($best as $groupid => $averagegrade) {
                         switch ($nameformat) {
@@ -404,13 +398,13 @@ class block_activity_results extends block_base {
                 $rank = 0;
                 if (!empty($worst)) {
                     $worst = array_reverse($worst, true);
-                    $this->content->text .= '<table class="grades"><caption>';
+                    $this->content->text .= '<table class="grades"><caption class="pb-0"><h6>';
                     if ($numworst == 1) {
                         $this->content->text .= get_string('worstgroupgrade', 'block_activity_results');
                     } else {
                         $this->content->text .= get_string('worstgroupgrades', 'block_activity_results', $numworst);
                     }
-                    $this->content->text .= '</caption><colgroup class="number" />';
+                    $this->content->text .= '</h6></caption><colgroup class="number" />';
                     $this->content->text .= '<colgroup class="name" /><colgroup class="grade" /><tbody>';
                     foreach ($worst as $groupid => $averagegrade) {
                         switch ($nameformat) {
@@ -474,10 +468,8 @@ class block_activity_results extends block_base {
 
                 // Get users from the same groups as me.
                 list($grouptest, $params) = $DB->get_in_or_equal(array_keys($mygroups));
-                $params[] = $company->id;
                 $mygroupsusers = $DB->get_records_sql_menu(
-                        'SELECT DISTINCT userid, 1 FROM {groups_members} WHERE groupid ' . $grouptest
-                        . ' AND userid IN (SELECT userid FROM {company_users} WHERE companyid = ?',
+                        'SELECT DISTINCT userid, 1 FROM {groups_members} WHERE groupid ' . $grouptest,
                         $params);
 
                 // Filter out the grades belonging to other users, and proceed as if there were no groups.
@@ -537,13 +529,13 @@ class block_activity_results extends block_base {
 
                 $rank = 0;
                 if (!empty($best)) {
-                    $this->content->text .= '<table class="grades"><caption>';
+                    $this->content->text .= '<table class="grades"><caption class="pb-0"><h6>';
                     if ($numbest == 1) {
                         $this->content->text .= get_string('bestgrade', 'block_activity_results');
                     } else {
                         $this->content->text .= get_string('bestgrades', 'block_activity_results', $numbest);
                     }
-                    $this->content->text .= '</caption><colgroup class="number" />';
+                    $this->content->text .= '</h6></caption><colgroup class="number" />';
                     $this->content->text .= '<colgroup class="name" /><colgroup class="grade" /><tbody>';
                     foreach ($best as $userid => $gradeid) {
                         switch ($nameformat) {
@@ -600,13 +592,13 @@ class block_activity_results extends block_base {
                 $rank = 0;
                 if (!empty($worst)) {
                     $worst = array_reverse($worst, true);
-                    $this->content->text .= '<table class="grades"><caption>';
+                    $this->content->text .= '<table class="grades"><caption class="pb-0"><h6>';
                     if ($numbest == 1) {
                         $this->content->text .= get_string('worstgrade', 'block_activity_results');
                     } else {
                         $this->content->text .= get_string('worstgrades', 'block_activity_results', $numworst);
                     }
-                    $this->content->text .= '</caption><colgroup class="number" />';
+                    $this->content->text .= '</h6></caption><colgroup class="number" />';
                     $this->content->text .= '<colgroup class="name" /><colgroup class="grade" /><tbody>';
                     foreach ($worst as $userid => $gradeid) {
                         switch ($nameformat) {
@@ -686,17 +678,17 @@ class block_activity_results extends block_base {
     }
 
     /**
-     * Generates the Link to the activity module when displaed outside of the module
+     * Generates the Link to the activity module when displayed outside of the module.
      * @param stdclass $activity
      * @param stdclass $cm
      * @return string
      */
     private function activity_link($activity, $cm) {
 
-        $o = html_writer::start_tag('h3');
+        $o = html_writer::start_tag('h5');
         $o .= html_writer::link(new moodle_url('/mod/'.$activity->itemmodule.'/view.php',
         array('id' => $cm->id)), format_string(($activity->itemname), true, ['context' => context_module::instance($cm->id)]));
-        $o .= html_writer::end_tag('h3');
+        $o .= html_writer::end_tag('h5');
         return $o;
     }
 
@@ -711,5 +703,22 @@ class block_activity_results extends block_base {
         $scale = explode ( ',', $scaletext);
         return $scale;
 
+    }
+
+    /**
+     * Return the plugin config settings for external functions.
+     *
+     * @return stdClass the configs for both the block instance and plugin
+     * @since Moodle 3.8
+     */
+    public function get_config_for_external() {
+        // Return all settings for all users since it is safe (no private keys, etc..).
+        $instanceconfigs = !empty($this->config) ? $this->config : new stdClass();
+        $pluginconfigs = get_config('block_activity_results');
+
+        return (object) [
+            'instance' => $instanceconfigs,
+            'plugin' => $pluginconfigs,
+        ];
     }
 }

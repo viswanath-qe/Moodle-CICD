@@ -278,13 +278,7 @@ class auth_plugin_mnet extends auth_plugin_base {
         if (isset($remoteuser->lang)) {
             $remoteuser->lang = clean_param(str_replace('_utf8', '', $remoteuser->lang), PARAM_LANG);
         }
-        if (empty($remoteuser->lang)) {
-            if (!empty($CFG->lang)) {
-                $remoteuser->lang = $CFG->lang;
-            } else {
-                $remoteuser->lang = 'en';
-            }
-        }
+
         $firsttime = false;
 
         // get the local record for the remote user
@@ -735,25 +729,6 @@ class auth_plugin_mnet extends auth_plugin_base {
 
         if (empty($returnString)) return array('code' => 0, 'message' => 'All ok', 'last log id' => $remoteclient->last_log_id);
         return array('code' => 1, 'message' => $returnString, 'last log id' => $remoteclient->last_log_id);
-    }
-
-    /**
-     * Cron function will be called automatically by cron.php every 5 minutes
-     *
-     * @return void
-     */
-    function cron() {
-        global $DB;
-
-        // run the keepalive client
-        $this->keepalive_client();
-
-        $random100 = rand(0,100);
-        if ($random100 < 10) {     // Approximately 10% of the time.
-            // nuke olden sessions
-            $longtime = time() - (1 * 3600 * 24);
-            $DB->delete_records_select('mnet_session', "expires < ?", array($longtime));
-        }
     }
 
     /**

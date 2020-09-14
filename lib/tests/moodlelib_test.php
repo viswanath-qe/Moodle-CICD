@@ -36,18 +36,24 @@ class core_moodlelib_testcase extends advanced_testcase {
      * It is not possible to directly change the result of get_string in
      * a unit test. Instead, we create a language pack for language 'xx' in
      * dataroot and make langconfig.php with the string we need to change.
-     * The example separator used here is 'X'; on PHP 5.3 and before this
+     * The default example separator used here is 'X'; on PHP 5.3 and before this
      * must be a single byte character due to PHP bug/limitation in
      * number_format, so you can't use UTF-8 characters.
+     *
+     * @param string $decsep Separator character. Defaults to `'X'`.
      */
-    protected function define_local_decimal_separator() {
+    protected function define_local_decimal_separator(string $decsep = 'X') {
         global $SESSION, $CFG;
 
         $SESSION->lang = 'xx';
-        $langconfig = "<?php\n\$string['decsep'] = 'X';";
+        $langconfig = "<?php\n\$string['decsep'] = '$decsep';";
         $langfolder = $CFG->dataroot . '/lang/xx';
         check_dir_exists($langfolder);
         file_put_contents($langfolder . '/langconfig.php', $langconfig);
+
+        // Ensure the new value is picked up and not taken from the cache.
+        $stringmanager = get_string_manager();
+        $stringmanager->reset_caches(true);
     }
 
     public function test_cleanremoteaddr() {
@@ -517,12 +523,44 @@ class core_moodlelib_testcase extends advanced_testcase {
         $this->assertSame('', clean_param('mod__something', PARAM_COMPONENT));
         $this->assertSame('', clean_param('auth_xx-yy', PARAM_COMPONENT));
         $this->assertSame('', clean_param('_auth_xx', PARAM_COMPONENT));
-        $this->assertSame('', clean_param('a2uth_xx', PARAM_COMPONENT));
+        $this->assertSame('a2uth_xx', clean_param('a2uth_xx', PARAM_COMPONENT));
         $this->assertSame('', clean_param('auth_xx_', PARAM_COMPONENT));
         $this->assertSame('', clean_param('auth_xx.old', PARAM_COMPONENT));
         $this->assertSame('', clean_param('_user', PARAM_COMPONENT));
         $this->assertSame('', clean_param('2rating', PARAM_COMPONENT));
         $this->assertSame('', clean_param('user_', PARAM_COMPONENT));
+    }
+
+    public function test_clean_param_localisedfloat() {
+
+        $this->assertSame(0.5, clean_param('0.5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(false, clean_param('0X5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(0.5, clean_param('.5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(false, clean_param('X5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(10.5, clean_param('10.5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(false, clean_param('10X5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(1000.5, clean_param('1 000.5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(false, clean_param('1 000X5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(false, clean_param('1.000.5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(false, clean_param('1X000X5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(false, clean_param('nan', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(false, clean_param('10.6blah', PARAM_LOCALISEDFLOAT));
+
+        // Tests with a localised decimal separator.
+        $this->define_local_decimal_separator();
+
+        $this->assertSame(0.5, clean_param('0.5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(0.5, clean_param('0X5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(0.5, clean_param('.5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(0.5, clean_param('X5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(10.5, clean_param('10.5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(10.5, clean_param('10X5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(1000.5, clean_param('1 000.5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(1000.5, clean_param('1 000X5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(false, clean_param('1.000.5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(false, clean_param('1X000X5', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(false, clean_param('nan', PARAM_LOCALISEDFLOAT));
+        $this->assertSame(false, clean_param('10X6blah', PARAM_LOCALISEDFLOAT));
     }
 
     public function test_is_valid_plugin_name() {
@@ -1714,73 +1752,85 @@ class core_moodlelib_testcase extends advanced_testcase {
                 'time' => '1309514400',
                 'usertimezone' => 'America/Moncton',
                 'timezone' => '0.0', // No dst offset.
-                'expectedoutput' => 'Friday, 1 July 2011, 10:00 AM'
+                'expectedoutput' => 'Friday, 1 July 2011, 10:00 AM',
+                'expectedoutputhtml' => '<time datetime="2011-07-01T07:00:00-03:00">Friday, 1 July 2011, 10:00 AM</time>'
             ),
             array(
                 'time' => '1309514400',
                 'usertimezone' => 'America/Moncton',
                 'timezone' => '99', // Dst offset and timezone offset.
-                'expectedoutput' => 'Friday, 1 July 2011, 7:00 AM'
+                'expectedoutput' => 'Friday, 1 July 2011, 7:00 AM',
+                'expectedoutputhtml' => '<time datetime="2011-07-01T07:00:00-03:00">Friday, 1 July 2011, 7:00 AM</time>'
             ),
             array(
                 'time' => '1309514400',
                 'usertimezone' => 'America/Moncton',
                 'timezone' => 'America/Moncton', // Dst offset and timezone offset.
-                'expectedoutput' => 'Friday, 1 July 2011, 7:00 AM'
+                'expectedoutput' => 'Friday, 1 July 2011, 7:00 AM',
+                'expectedoutputhtml' => '<time datetime="2011-07-01t07:00:00-03:00">Friday, 1 July 2011, 7:00 AM</time>'
             ),
             array(
                 'time' => '1293876000 ',
                 'usertimezone' => 'America/Moncton',
                 'timezone' => '0.0', // No dst offset.
-                'expectedoutput' => 'Saturday, 1 January 2011, 10:00 AM'
+                'expectedoutput' => 'Saturday, 1 January 2011, 10:00 AM',
+                'expectedoutputhtml' => '<time datetime="2011-01-01T06:00:00-04:00">Saturday, 1 January 2011, 10:00 AM</time>'
             ),
             array(
                 'time' => '1293876000 ',
                 'usertimezone' => 'America/Moncton',
                 'timezone' => '99', // No dst offset in jan, so just timezone offset.
-                'expectedoutput' => 'Saturday, 1 January 2011, 6:00 AM'
+                'expectedoutput' => 'Saturday, 1 January 2011, 6:00 AM',
+                'expectedoutputhtml' => '<time datetime="2011-01-01T06:00:00-04:00">Saturday, 1 January 2011, 6:00 AM</time>'
             ),
             array(
                 'time' => '1293876000 ',
                 'usertimezone' => 'America/Moncton',
                 'timezone' => 'America/Moncton', // No dst offset in jan.
-                'expectedoutput' => 'Saturday, 1 January 2011, 6:00 AM'
+                'expectedoutput' => 'Saturday, 1 January 2011, 6:00 AM',
+                'expectedoutputhtml' => '<time datetime="2011-01-01T06:00:00-04:00">Saturday, 1 January 2011, 6:00 AM</time>'
             ),
             array(
                 'time' => '1293876000 ',
                 'usertimezone' => '2',
                 'timezone' => '99', // Take user timezone.
-                'expectedoutput' => 'Saturday, 1 January 2011, 12:00 PM'
+                'expectedoutput' => 'Saturday, 1 January 2011, 12:00 PM',
+                'expectedoutputhtml' => '<time datetime="2011-01-01T12:00:00+02:00">Saturday, 1 January 2011, 12:00 PM</time>'
             ),
             array(
                 'time' => '1293876000 ',
                 'usertimezone' => '-2',
                 'timezone' => '99', // Take user timezone.
-                'expectedoutput' => 'Saturday, 1 January 2011, 8:00 AM'
+                'expectedoutput' => 'Saturday, 1 January 2011, 8:00 AM',
+                'expectedoutputhtml' => '<time datetime="2011-01-01T08:00:00-02:00">Saturday, 1 January 2011, 8:00 AM</time>'
             ),
             array(
                 'time' => '1293876000 ',
                 'usertimezone' => '-10',
                 'timezone' => '2', // Take this timezone.
-                'expectedoutput' => 'Saturday, 1 January 2011, 12:00 PM'
+                'expectedoutput' => 'Saturday, 1 January 2011, 12:00 PM',
+                'expectedoutputhtml' => '<time datetime="2011-01-01T00:00:00-10:00">Saturday, 1 January 2011, 12:00 PM</time>'
             ),
             array(
                 'time' => '1293876000 ',
                 'usertimezone' => '-10',
                 'timezone' => '-2', // Take this timezone.
-                'expectedoutput' => 'Saturday, 1 January 2011, 8:00 AM'
+                'expectedoutput' => 'Saturday, 1 January 2011, 8:00 AM',
+                'expectedoutputhtml' => '<time datetime="2011-01-01T00:00:00-10:00">Saturday, 1 January 2011, 8:00 AM</time>'
             ),
             array(
                 'time' => '1293876000 ',
                 'usertimezone' => '-10',
                 'timezone' => 'random/time', // This should show server time.
-                'expectedoutput' => 'Saturday, 1 January 2011, 6:00 PM'
+                'expectedoutput' => 'Saturday, 1 January 2011, 6:00 PM',
+                'expectedoutputhtml' => '<time datetime="2011-01-01T00:00:00-10:00">Saturday, 1 January 2011, 6:00 PM</time>'
             ),
             array(
                 'time' => '1293876000 ',
                 'usertimezone' => '20', // Fallback to server time zone.
                 'timezone' => '99',     // This should show user time.
-                'expectedoutput' => 'Saturday, 1 January 2011, 6:00 PM'
+                'expectedoutput' => 'Saturday, 1 January 2011, 6:00 PM',
+                'expectedoutputhtml' => '<time datetime="2011-01-01T18:00:00+08:00">Saturday, 1 January 2011, 6:00 PM</time>'
             ),
         );
 
@@ -1791,13 +1841,18 @@ class core_moodlelib_testcase extends advanced_testcase {
         foreach ($testvalues as $vals) {
             $USER->timezone = $vals['usertimezone'];
             $actualoutput = userdate($vals['time'], '%A, %d %B %Y, %I:%M %p', $vals['timezone']);
+            $actualoutputhtml = userdate_htmltime($vals['time'], '%A, %d %B %Y, %I:%M %p', $vals['timezone']);
 
             // On different systems case of AM PM changes so compare case insensitive.
             $vals['expectedoutput'] = core_text::strtolower($vals['expectedoutput']);
+            $vals['expectedoutputhtml'] = core_text::strtolower($vals['expectedoutputhtml']);
             $actualoutput = core_text::strtolower($actualoutput);
+            $actualoutputhtml = core_text::strtolower($actualoutputhtml);
 
             $this->assertSame($vals['expectedoutput'], $actualoutput,
                 "Expected: {$vals['expectedoutput']} => Actual: {$actualoutput} \ndata: " . var_export($vals, true));
+            $this->assertSame($vals['expectedoutputhtml'], $actualoutputhtml,
+                "Expected: {$vals['expectedoutputhtml']} => Actual: {$actualoutputhtml} \ndata: " . var_export($vals, true));
         }
     }
 
@@ -2194,6 +2249,14 @@ class core_moodlelib_testcase extends advanced_testcase {
         // Custom number of decimal places.
         $this->assertEquals('5.43000', format_float(5.43, 5));
 
+        // Auto detect the number of decimal places.
+        $this->assertEquals('5.43', format_float(5.43, -1));
+        $this->assertEquals('5.43', format_float(5.43000, -1));
+        $this->assertEquals('5', format_float(5, -1));
+        $this->assertEquals('5', format_float(5.0, -1));
+        $this->assertEquals('0.543', format_float('5.43e-1', -1));
+        $this->assertEquals('0.543', format_float('5.43000e-1', -1));
+
         // Option to strip ending zeros after rounding.
         $this->assertEquals('5.43', format_float(5.43, 5, true, true));
         $this->assertEquals('5', format_float(5.0001, 3, true, true));
@@ -2208,6 +2271,14 @@ class core_moodlelib_testcase extends advanced_testcase {
         // Localisation off.
         $this->assertEquals('5.43000', format_float(5.43, 5, false));
         $this->assertEquals('5.43', format_float(5.43, 5, false, true));
+
+        // Tests with tilde as localised decimal separator.
+        $this->define_local_decimal_separator('~');
+
+        // Must also work for '~' as decimal separator.
+        $this->assertEquals('5', format_float(5.0001, 3, true, true));
+        $this->assertEquals('5~43000', format_float(5.43, 5));
+        $this->assertEquals('5~43', format_float(5.43, 5, true, true));
     }
 
     /**
@@ -2395,6 +2466,59 @@ class core_moodlelib_testcase extends advanced_testcase {
     }
 
     /**
+     * Test deletion of user with long username
+     */
+    public function test_delete_user_long_username() {
+        global $DB;
+
+        $this->resetAfterTest();
+
+        // For users without an e-mail, one will be created during deletion using {$username}.{$id}@unknownemail.invalid format.
+        $user = $this->getDataGenerator()->create_user([
+            'username' => str_repeat('a', 75),
+            'email' => '',
+        ]);
+
+        delete_user($user);
+
+        // The username for the deleted user shouldn't exceed 100 characters.
+        $usernamedeleted = $DB->get_field('user', 'username', ['id' => $user->id]);
+        $this->assertEquals(100, core_text::strlen($usernamedeleted));
+
+        $timestrlength = core_text::strlen((string) time());
+
+        // It should start with the user name, and end with the current time.
+        $this->assertStringStartsWith("{$user->username}.{$user->id}@", $usernamedeleted);
+        $this->assertRegExp('/\.\d{' . $timestrlength . '}$/', $usernamedeleted);
+    }
+
+    /**
+     * Test deletion of user with long email address
+     */
+    public function test_delete_user_long_email() {
+        global $DB;
+
+        $this->resetAfterTest();
+
+        // Create user with 90 character email address.
+        $user = $this->getDataGenerator()->create_user([
+            'email' => str_repeat('a', 78) . '@example.com',
+        ]);
+
+        delete_user($user);
+
+        // The username for the deleted user shouldn't exceed 100 characters.
+        $usernamedeleted = $DB->get_field('user', 'username', ['id' => $user->id]);
+        $this->assertEquals(100, core_text::strlen($usernamedeleted));
+
+        $timestrlength = core_text::strlen((string) time());
+
+        // Max username length is 100 chars. Select up to limit - (length of current time + 1 [period character]) from users email.
+        $expectedemail = core_text::substr($user->email, 0, 100 - ($timestrlength + 1));
+        $this->assertRegExp('/^' . preg_quote($expectedemail) . '\.\d{' . $timestrlength . '}$/', $usernamedeleted);
+    }
+
+    /**
      * Test function convert_to_array()
      */
     public function test_convert_to_array() {
@@ -2412,7 +2536,8 @@ class core_moodlelib_testcase extends advanced_testcase {
             'contextlevel' => $obj->contextlevel,
             'instanceid'   => $obj->instanceid,
             'path'         => $obj->path,
-            'depth'        => $obj->depth
+            'depth'        => $obj->depth,
+            'locked'       => $obj->locked,
         );
         $this->assertEquals(convert_to_array($obj), $ar);
     }
@@ -2737,10 +2862,12 @@ class core_moodlelib_testcase extends advanced_testcase {
      * the user table and fire event.
      */
     public function test_update_internal_user_password_no_cache() {
+        global $DB;
         $this->resetAfterTest();
 
         $user = $this->getDataGenerator()->create_user(array('auth' => 'cas'));
-        $this->assertEquals(AUTH_PASSWORD_NOT_CACHED, $user->password);
+        $DB->update_record('user', ['id' => $user->id, 'password' => AUTH_PASSWORD_NOT_CACHED]);
+        $user->password = AUTH_PASSWORD_NOT_CACHED;
 
         $sink = $this->redirectEvents();
         update_internal_user_password($user, 'wonkawonka');
@@ -3094,6 +3221,32 @@ class core_moodlelib_testcase extends advanced_testcase {
     }
 
     /**
+     * Test email with custom headers
+     */
+    public function test_send_email_with_custom_header() {
+        global $DB, $CFG;
+        $this->preventResetByRollback();
+        $this->resetAfterTest();
+
+        $touser = $this->getDataGenerator()->create_user();
+        $fromuser = $this->getDataGenerator()->create_user();
+        $fromuser->customheaders = 'X-Custom-Header: foo';
+
+        set_config('allowedemaildomains', 'example.com');
+        set_config('emailheaders', 'X-Fixed-Header: bar');
+
+        $sink = $this->redirectEmails();
+        email_to_user($touser, $fromuser, 'subject', 'message');
+
+        $emails = $sink->get_messages();
+        $this->assertCount(1, $emails);
+        $email = reset($emails);
+        $this->assertContains('X-Custom-Header: foo', $email->header);
+        $this->assertContains("X-Fixed-Header: bar", $email->header);
+        $sink->clear();
+    }
+
+    /**
      * A data provider for testing email diversion
      */
     public function diverted_emails_provider() {
@@ -3174,15 +3327,15 @@ class core_moodlelib_testcase extends advanced_testcase {
 
         $this->resetAfterTest();
 
-        $user1 = $this->getDataGenerator()->create_user(array('maildisplay' => 1));
-        $user2 = $this->getDataGenerator()->create_user(array('maildisplay' => 1));
+        $user1 = $this->getDataGenerator()->create_user(array('maildisplay' => 1, 'mailformat' => 0));
+        $user2 = $this->getDataGenerator()->create_user(array('maildisplay' => 1, 'mailformat' => 1));
         $user3 = $this->getDataGenerator()->create_user(array('maildisplay' => 0));
         set_config('allowedemaildomains', "example.com\r\nmoodle.org");
 
         $subject = 'subject';
         $messagetext = 'message text';
         $subject2 = 'subject 2';
-        $messagetext2 = 'message text 2';
+        $messagetext2 = '<b>message text 2</b>';
 
         // Close the default email sink.
         $sink = $this->redirectEmails();
@@ -3210,11 +3363,13 @@ class core_moodlelib_testcase extends advanced_testcase {
         $this->assertSame($messagetext, trim($result[0]->body));
         $this->assertSame($user1->email, $result[0]->to);
         $this->assertSame($user2->email, $result[0]->from);
+        $this->assertContains('Content-Type: text/plain', $result[0]->header);
 
         $this->assertSame($subject2, $result[1]->subject);
-        $this->assertSame($messagetext2, trim($result[1]->body));
+        $this->assertContains($messagetext2, quoted_printable_decode($result[1]->body));
         $this->assertSame($user2->email, $result[1]->to);
         $this->assertSame($user1->email, $result[1]->from);
+        $this->assertNotContains('Content-Type: text/plain', $result[1]->header);
 
         email_to_user($user1, $user2, $subject, $messagetext);
         $this->assertDebuggingCalled('Unit tests must not send real emails! Use $this->redirectEmails()');
@@ -3256,6 +3411,90 @@ class core_moodlelib_testcase extends advanced_testcase {
         $this->assertContains('error.txt', $result[0]->body);
         $this->assertContains('Error in attachment.  User attempted to attach a filename with a unsafe name.', $result[0]->body);
         $sink->close();
+    }
+
+    /**
+     * Data provider for {@see test_email_to_user_attachment}
+     *
+     * @return array
+     */
+    public function email_to_user_attachment_provider(): array {
+        global $CFG;
+
+        // Return all paths that can be used to send attachments from.
+        return [
+            'cachedir' => [$CFG->cachedir],
+            'dataroot' => [$CFG->dataroot],
+            'dirroot' => [$CFG->dirroot],
+            'localcachedir' => [$CFG->localcachedir],
+            'tempdir' => [$CFG->tempdir],
+            // Pass null to indicate we want to test a path relative to $CFG->dataroot.
+            'relative' => [null]
+        ];
+    }
+
+    /**
+     * Test sending attachments with email_to_user
+     *
+     * @param string|null $filedir
+     *
+     * @dataProvider email_to_user_attachment_provider
+     */
+    public function test_email_to_user_attachment(?string $filedir): void {
+        global $CFG;
+
+        // If $filedir is null, then write our test file to $CFG->dataroot.
+        $filepath = ($filedir ?: $CFG->dataroot) . '/hello.txt';
+        file_put_contents($filepath, 'Hello');
+
+        $user = core_user::get_support_user();
+        $message = 'Test attachment path';
+
+        // Create sink to catch all sent e-mails.
+        $sink = $this->redirectEmails();
+
+        // Attachment path will be that of the test file if $filedir was passed, otherwise the relative path from $CFG->dataroot.
+        $filename = basename($filepath);
+        $attachmentpath = $filedir ? $filepath : $filename;
+        email_to_user($user, $user, $message, $message, $message, $attachmentpath, $filename);
+
+        $messages = $sink->get_messages();
+        $sink->close();
+
+        $this->assertCount(1, $messages);
+
+        // Verify attachment in message body (attachment is in MIME format, but we can detect some Content fields).
+        $messagebody = reset($messages)->body;
+        $this->assertContains('Content-Type: text/plain; name="' . $filename . '"', $messagebody);
+        $this->assertContains('Content-Disposition: attachment; filename=' . $filename, $messagebody);
+
+        // Cleanup.
+        unlink($filepath);
+    }
+
+    /**
+     * Test sending an attachment that doesn't exist to email_to_user
+     */
+    public function test_email_to_user_attachment_missing(): void {
+        $user = core_user::get_support_user();
+        $message = 'Test attachment path';
+
+        // Create sink to catch all sent e-mails.
+        $sink = $this->redirectEmails();
+
+        $attachmentpath = '/hola/hello.txt';
+        $filename = basename($attachmentpath);
+        email_to_user($user, $user, $message, $message, $message, $attachmentpath, $filename);
+
+        $messages = $sink->get_messages();
+        $sink->close();
+
+        $this->assertCount(1, $messages);
+
+        // Verify attachment not in message body (attachment is in MIME format, but we can detect some Content fields).
+        $messagebody = reset($messages)->body;
+        $this->assertNotContains('Content-Type: text/plain; name="' . $filename . '"', $messagebody);
+        $this->assertNotContains('Content-Disposition: attachment; filename=' . $filename, $messagebody);
     }
 
     /**
@@ -3383,7 +3622,7 @@ class core_moodlelib_testcase extends advanced_testcase {
         $user = $this->getDataGenerator()->create_user(
             [
                 "username" => $username,
-                "confirmed" => false,
+                "confirmed" => 0,
                 "email" => 'test@example.com',
             ]
         );
@@ -3412,7 +3651,7 @@ class core_moodlelib_testcase extends advanced_testcase {
         $user = $this->getDataGenerator()->create_user(
             [
                 "username" => "many_-.@characters@_@-..-..",
-                "confirmed" => false,
+                "confirmed" => 0,
                 "email" => 'test@example.com',
             ]
         );
@@ -3569,6 +3808,10 @@ class core_moodlelib_testcase extends advanced_testcase {
      * Tests the getremoteaddr() function.
      */
     public function test_getremoteaddr() {
+        global $CFG;
+
+        $this->resetAfterTest();
+        $CFG->getremoteaddrconf = GETREMOTEADDR_SKIP_HTTP_CLIENT_IP;
         $xforwardedfor = isset($_SERVER['HTTP_X_FORWARDED_FOR']) ? $_SERVER['HTTP_X_FORWARDED_FOR'] : null;
 
         $_SERVER['HTTP_X_FORWARDED_FOR'] = '';
@@ -3585,27 +3828,27 @@ class core_moodlelib_testcase extends advanced_testcase {
 
         $_SERVER['HTTP_X_FORWARDED_FOR'] = '127.0.0.1,127.0.0.2';
         $twoip = getremoteaddr();
-        $this->assertEquals('127.0.0.1', $twoip);
+        $this->assertEquals('127.0.0.2', $twoip);
 
-        $_SERVER['HTTP_X_FORWARDED_FOR'] = '127.0.0.1,127.0.0.2, 127.0.0.3';
+        $_SERVER['HTTP_X_FORWARDED_FOR'] = '127.0.0.1,127.0.0.2,127.0.0.3';
         $threeip = getremoteaddr();
-        $this->assertEquals('127.0.0.1', $threeip);
+        $this->assertEquals('127.0.0.3', $threeip);
 
-        $_SERVER['HTTP_X_FORWARDED_FOR'] = '127.0.0.1:65535,127.0.0.2';
+        $_SERVER['HTTP_X_FORWARDED_FOR'] = '127.0.0.1,127.0.0.2:65535';
         $portip = getremoteaddr();
-        $this->assertEquals('127.0.0.1', $portip);
+        $this->assertEquals('127.0.0.2', $portip);
 
-        $_SERVER['HTTP_X_FORWARDED_FOR'] = '0:0:0:0:0:0:0:1,127.0.0.2';
+        $_SERVER['HTTP_X_FORWARDED_FOR'] = '127.0.0.1,0:0:0:0:0:0:0:2';
         $portip = getremoteaddr();
-        $this->assertEquals('0:0:0:0:0:0:0:1', $portip);
+        $this->assertEquals('0:0:0:0:0:0:0:2', $portip);
 
-        $_SERVER['HTTP_X_FORWARDED_FOR'] = '0::1,127.0.0.2';
+        $_SERVER['HTTP_X_FORWARDED_FOR'] = '127.0.0.1,0::2';
         $portip = getremoteaddr();
-        $this->assertEquals('0:0:0:0:0:0:0:1', $portip);
+        $this->assertEquals('0:0:0:0:0:0:0:2', $portip);
 
-        $_SERVER['HTTP_X_FORWARDED_FOR'] = '[0:0:0:0:0:0:0:1]:65535,127.0.0.2';
+        $_SERVER['HTTP_X_FORWARDED_FOR'] = '127.0.0.1,[0:0:0:0:0:0:0:2]:65535';
         $portip = getremoteaddr();
-        $this->assertEquals('0:0:0:0:0:0:0:1', $portip);
+        $this->assertEquals('0:0:0:0:0:0:0:2', $portip);
 
         $_SERVER['HTTP_X_FORWARDED_FOR'] = $xforwardedfor;
 
@@ -3911,6 +4154,163 @@ class core_moodlelib_testcase extends advanced_testcase {
     }
 
     /**
+     * Test allowemailaddresses setting.
+     *
+     * @param string $email Email address for the from user.
+     * @param string $config The CFG->allowemailaddresses config values
+     * @param false/string $result The expected result.
+     *
+     * @dataProvider data_email_is_not_allowed_for_allowemailaddresses
+     */
+    public function test_email_is_not_allowed_for_allowemailaddresses($email, $config, $result) {
+        $this->resetAfterTest();
+
+        set_config('allowemailaddresses', $config);
+        $this->assertEquals($result, email_is_not_allowed($email));
+    }
+
+    /**
+     * Data provider for data_email_is_not_allowed_for_allowemailaddresses.
+     *
+     * @return array Returns an array of test data for the above function.
+     */
+    public function data_email_is_not_allowed_for_allowemailaddresses() {
+        return [
+            // Test allowed domain empty list.
+            [
+                'email' => 'fromuser@example.com',
+                'config' => '',
+                'result' => false
+            ],
+            // Test from email is in allowed domain.
+            [
+                'email' => 'fromuser@example.com',
+                'config' => 'example.com test.com',
+                'result' => false
+            ],
+            // Test from email is in allowed domain but uppercase config.
+            [
+                'email' => 'fromuser@example.com',
+                'config' => 'EXAMPLE.com test.com',
+                'result' => false
+            ],
+            // Test from email is in allowed domain but uppercase email.
+            [
+                'email' => 'fromuser@EXAMPLE.com',
+                'config' => 'example.com test.com',
+                'result' => false
+            ],
+            // Test from email is in allowed subdomain.
+            [
+                'email' => 'fromuser@something.example.com',
+                'config' => '.example.com test.com',
+                'result' => false
+            ],
+            // Test from email is in allowed subdomain but uppercase config.
+            [
+                'email' => 'fromuser@something.example.com',
+                'config' => '.EXAMPLE.com test.com',
+                'result' => false
+            ],
+            // Test from email is in allowed subdomain but uppercase email.
+            [
+                'email' => 'fromuser@something.EXAMPLE.com',
+                'config' => '.example.com test.com',
+                'result' => false
+            ],
+            // Test from email is not in allowed domain.
+            [   'email' => 'fromuser@moodle.com',
+                'config' => 'example.com test.com',
+                'result' => get_string('emailonlyallowed', '', 'example.com test.com')
+            ],
+            // Test from email is not in allowed subdomain.
+            [   'email' => 'fromuser@something.example.com',
+                'config' => 'example.com test.com',
+                'result' => get_string('emailonlyallowed', '', 'example.com test.com')
+            ],
+        ];
+    }
+
+    /**
+     * Test denyemailaddresses setting.
+     *
+     * @param string $email Email address for the from user.
+     * @param string $config The CFG->denyemailaddresses config values
+     * @param false/string $result The expected result.
+     *
+     * @dataProvider data_email_is_not_allowed_for_denyemailaddresses
+     */
+    public function test_email_is_not_allowed_for_denyemailaddresses($email, $config, $result) {
+        $this->resetAfterTest();
+
+        set_config('denyemailaddresses', $config);
+        $this->assertEquals($result, email_is_not_allowed($email));
+    }
+
+
+    /**
+     * Data provider for test_email_is_not_allowed_for_denyemailaddresses.
+     *
+     * @return array Returns an array of test data for the above function.
+     */
+    public function data_email_is_not_allowed_for_denyemailaddresses() {
+        return [
+            // Test denied domain empty list.
+            [
+                'email' => 'fromuser@example.com',
+                'config' => '',
+                'result' => false
+            ],
+            // Test from email is in denied domain.
+            [
+                'email' => 'fromuser@example.com',
+                'config' => 'example.com test.com',
+                'result' => get_string('emailnotallowed', '', 'example.com test.com')
+            ],
+            // Test from email is in denied domain but uppercase config.
+            [
+                'email' => 'fromuser@example.com',
+                'config' => 'EXAMPLE.com test.com',
+                'result' => get_string('emailnotallowed', '', 'EXAMPLE.com test.com')
+            ],
+            // Test from email is in denied domain but uppercase email.
+            [
+                'email' => 'fromuser@EXAMPLE.com',
+                'config' => 'example.com test.com',
+                'result' => get_string('emailnotallowed', '', 'example.com test.com')
+            ],
+            // Test from email is in denied subdomain.
+            [
+                'email' => 'fromuser@something.example.com',
+                'config' => '.example.com test.com',
+                'result' => get_string('emailnotallowed', '', '.example.com test.com')
+            ],
+            // Test from email is in denied subdomain but uppercase config.
+            [
+                'email' => 'fromuser@something.example.com',
+                'config' => '.EXAMPLE.com test.com',
+                'result' => get_string('emailnotallowed', '', '.EXAMPLE.com test.com')
+            ],
+            // Test from email is in denied subdomain but uppercase email.
+            [
+                'email' => 'fromuser@something.EXAMPLE.com',
+                'config' => '.example.com test.com',
+                'result' => get_string('emailnotallowed', '', '.example.com test.com')
+            ],
+            // Test from email is not in denied domain.
+            [   'email' => 'fromuser@moodle.com',
+                'config' => 'example.com test.com',
+                'result' => false
+            ],
+            // Test from email is not in denied subdomain.
+            [   'email' => 'fromuser@something.example.com',
+                'config' => 'example.com test.com',
+                'result' => false
+            ],
+        ];
+    }
+
+    /**
      * Test safe method unserialize_array().
      */
     public function test_unserialize_array() {
@@ -4117,5 +4517,263 @@ class core_moodlelib_testcase extends advanced_testcase {
                 'Closure::__invoke',
             ],
         ];
+    }
+
+    /**
+     * Data provider for \core_moodlelib_testcase::test_get_complete_user_data().
+     *
+     * @return array
+     */
+    public function user_data_provider() {
+        return [
+            'Fetch data using a valid username' => [
+                'username', 's1', true
+            ],
+            'Fetch data using a valid username, different case' => [
+                'username', 'S1', true
+            ],
+            'Fetch data using a valid username, different case for fieldname and value' => [
+                'USERNAME', 'S1', true
+            ],
+            'Fetch data using an invalid username' => [
+                'username', 's2', false
+            ],
+            'Fetch by email' => [
+                'email', 's1@example.com', true
+            ],
+            'Fetch data using a non-existent email' => [
+                'email', 's2@example.com', false
+            ],
+            'Fetch data using a non-existent email, throw exception' => [
+                'email', 's2@example.com', false, dml_missing_record_exception::class
+            ],
+            'Multiple accounts with the same email' => [
+                'email', 's1@example.com', false, 1
+            ],
+            'Multiple accounts with the same email, throw exception' => [
+                'email', 's1@example.com', false, 1, dml_multiple_records_exception::class
+            ],
+            'Fetch data using a valid user ID' => [
+                'id', true, true
+            ],
+            'Fetch data using a non-existent user ID' => [
+                'id', false, false
+            ],
+        ];
+    }
+
+    /**
+     * Test for get_complete_user_data().
+     *
+     * @dataProvider user_data_provider
+     * @param string $field The field to use for the query.
+     * @param string|boolean $value The field value. When fetching by ID, set true to fetch valid user ID, false otherwise.
+     * @param boolean $success Whether we expect for the fetch to succeed or return false.
+     * @param int $allowaccountssameemail Value for $CFG->allowaccountssameemail.
+     * @param string $expectedexception The exception to be expected.
+     */
+    public function test_get_complete_user_data($field, $value, $success, $allowaccountssameemail = 0, $expectedexception = '') {
+        $this->resetAfterTest();
+
+        // Set config settings we need for our environment.
+        set_config('allowaccountssameemail', $allowaccountssameemail);
+
+        // Generate the user data.
+        $generator = $this->getDataGenerator();
+        $userdata = [
+            'username' => 's1',
+            'email' => 's1@example.com',
+        ];
+        $user = $generator->create_user($userdata);
+
+        if ($allowaccountssameemail) {
+            // Create another user with the same email address.
+            $generator->create_user(['email' => 's1@example.com']);
+        }
+
+        // Since the data provider can't know what user ID to use, do a special handling for ID field tests.
+        if ($field === 'id') {
+            if ($value) {
+                // Test for fetching data using a valid user ID. Use the generated user's ID.
+                $value = $user->id;
+            } else {
+                // Test for fetching data using a non-existent user ID.
+                $value = $user->id + 1;
+            }
+        }
+
+        // When an exception is expected.
+        $throwexception = false;
+        if ($expectedexception) {
+            $this->expectException($expectedexception);
+            $throwexception = true;
+        }
+
+        $fetcheduser = get_complete_user_data($field, $value, null, $throwexception);
+        if ($success) {
+            $this->assertEquals($user->id, $fetcheduser->id);
+            $this->assertEquals($user->username, $fetcheduser->username);
+            $this->assertEquals($user->email, $fetcheduser->email);
+        } else {
+            $this->assertFalse($fetcheduser);
+        }
+    }
+
+    /**
+     * Test for send_password_change_().
+     */
+    public function test_send_password_change_info() {
+        $this->resetAfterTest();
+
+        $user = $this->getDataGenerator()->create_user();
+
+        $sink = $this->redirectEmails(); // Make sure we are redirecting emails.
+        send_password_change_info($user);
+        $result = $sink->get_messages();
+        $sink->close();
+
+        $this->assertContains('passwords cannot be reset on this site', quoted_printable_decode($result[0]->body));
+    }
+
+    /**
+     * Test the get_time_interval_string for a range of inputs.
+     *
+     * @dataProvider get_time_interval_string_provider
+     * @param int $time1 the time1 param.
+     * @param int $time2 the time2 param.
+     * @param string|null $format the format param.
+     * @param string $expected the expected string.
+     */
+    public function test_get_time_interval_string(int $time1, int $time2, ?string $format, string $expected) {
+        if (is_null($format)) {
+            $this->assertEquals($expected, get_time_interval_string($time1, $time2));
+        } else {
+            $this->assertEquals($expected, get_time_interval_string($time1, $time2, $format));
+        }
+    }
+
+    /**
+     * Data provider for the test_get_time_interval_string() method.
+     */
+    public function get_time_interval_string_provider() {
+        return [
+            'Time is after the reference time by 1 minute, omitted format' => [
+                'time1' => 12345660,
+                'time2' => 12345600,
+                'format' => null,
+                'expected' => '0d 0h 1m'
+            ],
+            'Time is before the reference time by 1 minute, omitted format' => [
+                'time1' => 12345540,
+                'time2' => 12345600,
+                'format' => null,
+                'expected' => '0d 0h 1m'
+            ],
+            'Time is equal to the reference time, omitted format' => [
+                'time1' => 12345600,
+                'time2' => 12345600,
+                'format' => null,
+                'expected' => '0d 0h 0m'
+            ],
+            'Time is after the reference time by 1 minute, empty string format' => [
+                'time1' => 12345660,
+                'time2' => 12345600,
+                'format' => '',
+                'expected' => '0d 0h 1m'
+            ],
+            'Time is before the reference time by 1 minute, empty string format' => [
+                'time1' => 12345540,
+                'time2' => 12345600,
+                'format' => '',
+                'expected' => '0d 0h 1m'
+            ],
+            'Time is equal to the reference time, empty string format' => [
+                'time1' => 12345600,
+                'time2' => 12345600,
+                'format' => '',
+                'expected' => '0d 0h 0m'
+            ],
+            'Time is after the reference time by 1 minute, custom format' => [
+                'time1' => 12345660,
+                'time2' => 12345600,
+                'format' => '%R%adays %hhours %imins',
+                'expected' => '+0days 0hours 1mins'
+            ],
+            'Time is before the reference time by 1 minute, custom format' => [
+                'time1' => 12345540,
+                'time2' => 12345600,
+                'format' => '%R%adays %hhours %imins',
+                'expected' => '-0days 0hours 1mins'
+            ],
+            'Time is equal to the reference time, custom format' => [
+                'time1' => 12345600,
+                'time2' => 12345600,
+                'format' => '%R%adays %hhours %imins',
+                'expected' => '+0days 0hours 0mins'
+            ],
+        ];
+    }
+
+    /**
+     * Tests the rename_to_unused_name function with a file.
+     */
+    public function test_rename_to_unused_name_file() {
+        global $CFG;
+
+        // Create a new file in dataroot.
+        $file = $CFG->dataroot . '/argh.txt';
+        file_put_contents($file, 'Frogs');
+
+        // Rename it.
+        $newname = rename_to_unused_name($file);
+
+        // Check new name has expected format.
+        $this->assertRegExp('~/_temp_[a-f0-9]+$~', $newname);
+
+        // Check it's still in the same folder.
+        $this->assertEquals($CFG->dataroot, dirname($newname));
+
+        // Check file can be loaded.
+        $this->assertEquals('Frogs', file_get_contents($newname));
+
+        // OK, delete the file.
+        unlink($newname);
+    }
+
+    /**
+     * Tests the rename_to_unused_name function with a directory.
+     */
+    public function test_rename_to_unused_name_dir() {
+        global $CFG;
+
+        // Create a new directory in dataroot.
+        $file = $CFG->dataroot . '/arghdir';
+        mkdir($file);
+
+        // Rename it.
+        $newname = rename_to_unused_name($file);
+
+        // Check new name has expected format.
+        $this->assertRegExp('~/_temp_[a-f0-9]+$~', $newname);
+
+        // Check it's still in the same folder.
+        $this->assertEquals($CFG->dataroot, dirname($newname));
+
+        // Check it's still a directory
+        $this->assertTrue(is_dir($newname));
+
+        // OK, delete the directory.
+        rmdir($newname);
+    }
+
+    /**
+     * Tests the rename_to_unused_name function with error cases.
+     */
+    public function test_rename_to_unused_name_failure() {
+        global $CFG;
+
+        // Rename a file that doesn't exist.
+        $file = $CFG->dataroot . '/argh.txt';
+        $this->assertFalse(rename_to_unused_name($file));
     }
 }

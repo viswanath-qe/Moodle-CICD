@@ -26,6 +26,7 @@
  */
 
 define('AJAX_SCRIPT', true);
+define('READ_ONLY_SESSION', true);
 
 /** Include config */
 require_once(__DIR__ . '/../../config.php');
@@ -103,14 +104,14 @@ try {
     }
 
     // Remove links to categories if required.
-    //if (!$linkcategories) {
+    if (!$linkcategories) {
         foreach ($branch->find_all_of_type(navigation_node::TYPE_CATEGORY) as $category) {
             $category->action = null;
         }
         foreach ($branch->find_all_of_type(navigation_node::TYPE_MY_CATEGORY) as $category) {
             $category->action = null;
         }
-    //}
+    }
 
     // Stop buffering errors at this point
     $html = ob_get_contents();

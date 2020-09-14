@@ -48,7 +48,8 @@ class provider implements
         \core_privacy\local\request\subsystem\plugin_provider,
         \core_privacy\local\request\core_userlist_provider,
         // We store a userkey for token-based file access.
-        \core_privacy\local\request\subsystem\provider {
+        \core_privacy\local\request\subsystem\provider,
+        \core_privacy\local\request\shared_userlist_provider {
 
     /**
      * Returns metadata.
@@ -71,6 +72,8 @@ class provider implements
             'timecreated' => 'privacy:metadata:files:timecreated',
             'timemodified' => 'privacy:metadata:files:timemodified',
         ], 'privacy:metadata:files');
+
+        $collection->add_subsystem_link('core_userkey', [], 'privacy:metadata:core_userkey');
 
         return $collection;
     }

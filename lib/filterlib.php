@@ -38,7 +38,7 @@ define('TEXTFILTER_DISABLED', -9999);
  *  keys. It must be something rare enough to avoid having matches with
  *  filterobjects. MDL-18165
  */
-define('TEXTFILTER_EXCL_SEPARATOR', '-%-');
+define('TEXTFILTER_EXCL_SEPARATOR', chr(0x1F) . '%' . chr(0x1F));
 
 
 /**
@@ -710,6 +710,35 @@ function filter_set_global_state($filtername, $state, $move = 0) {
 }
 
 /**
+ * Returns the active state for a filter in the given context.
+ *
+ * @param string $filtername The filter name, for example 'tex'.
+ * @param integer $contextid The id of the context to get the data for.
+ * @return int value of active field for the given filter.
+ */
+function filter_get_active_state(string $filtername, $contextid = null): int {
+    global $DB;
+
+    if ($contextid === null) {
+        $contextid = context_system::instance()->id;
+    }
+    if (is_object($contextid)) {
+        $contextid = $contextid->id;
+    }
+
+    if (strpos($filtername, 'filter/') === 0) {
+        $filtername = substr($filtername, 7);
+    } else if (strpos($filtername, '/') !== false) {
+        throw new coding_exception("Invalid filter name '$filtername' used in filter_is_enabled()");
+    }
+    if ($active = $DB->get_field('filter_active', 'active', array('filter' => $filtername, 'contextid' => $contextid))) {
+        return $active;
+    }
+
+    return TEXTFILTER_DISABLED;
+}
+
+/**
  * @param string $filtername The filter name, for example 'tex'.
  * @return boolean is this filter allowed to be used on this site. That is, the
  *      admin has set the global 'active' setting to On, or Off, but available.
@@ -1278,7 +1307,7 @@ function filter_phrases($text, $linkarray, $ignoretagsopen = null, $ignoretagscl
     // for things that have already been matched on this page.
     static $usedphrases = [];
 
-    $ignoretags = array();  // To store all the enclosig tags to be completely ignored.
+    $ignoretags = array();  // To store all the enclosing tags to be completely ignored.
     $tags = array();        // To store all the simple tags to be ignored.
 
     if (!$linkarrayalreadyprepared) {
@@ -1418,8 +1447,15 @@ function filter_prepare_phrases_for_filtering(array $linkarray) {
         // Quote any regular expression characters and the delimiter in the work phrase to be searched.
         $linkobject->workregexp = preg_quote($linkobject->workregexp, '/');
 
+        // If we ony want to match entire words then add \b assertions. However, only
+        // do this if the first or last thing in the phrase to match is a word character.
         if ($linkobject->fullmatch) {
-            $linkobject->workregexp = '\b' . $linkobject->workregexp . '\b';
+            if (preg_match('~^\w~', $linkobject->workregexp)) {
+                $linkobject->workregexp = '\b' . $linkobject->workregexp;
+            }
+            if (preg_match('~\w$~', $linkobject->workregexp)) {
+                $linkobject->workregexp = $linkobject->workregexp . '\b';
+            }
         }
 
         $linkobject->workregexp = '/(' . $linkobject->workregexp . ')/s';
