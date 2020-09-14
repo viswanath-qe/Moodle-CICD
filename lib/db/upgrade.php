@@ -2489,19 +2489,7 @@ function xmldb_main_upgrade($oldversion) {
         upgrade_main_savepoint(true, 2020061500.02);
     }
 
-    if ($oldversion < 2020062600.01) {
-        // Add index to the token field in the external_tokens table.
-        $table = new xmldb_table('external_tokens');
-        $index = new xmldb_index('token', XMLDB_INDEX_NOTUNIQUE, ['token']);
-
-        if (!$dbman->index_exists($table, $index)) {
-            $dbman->add_index($table, $index);
-        }
-
-        upgrade_main_savepoint(true, 2020062600.01);
-    }
-
-    if ($oldversion < 2020071100.01) {
+    if ($oldversion < 2020061501.01) {
         // Clean up completion criteria records referring to NULL course prerequisites.
         $select = 'criteriatype = :type AND courseinstance IS NULL';
         $params = ['type' => 8]; // COMPLETION_CRITERIA_TYPE_COURSE.
@@ -2509,10 +2497,10 @@ function xmldb_main_upgrade($oldversion) {
         $DB->delete_records_select('course_completion_criteria', $select, $params);
 
         // Main savepoint reached.
-        upgrade_main_savepoint(true, 2020071100.01);
+        upgrade_main_savepoint(true, 2020061501.01);
     }
 
-    if ($oldversion < 2020072300.01) {
+    if ($oldversion < 2020061501.04) {
         // Restore and set the guest user if it has been previously removed via GDPR, or set to an nonexistent
         // user account.
         $currentguestuser = $DB->get_record('user', array('id' => $CFG->siteguest));
@@ -2539,10 +2527,10 @@ function xmldb_main_upgrade($oldversion) {
         }
 
         // Main savepoint reached.
-        upgrade_main_savepoint(true, 2020072300.01);
+        upgrade_main_savepoint(true, 2020061501.04);
     }
 
-    if ($oldversion < 2020081400.01) {
+    if ($oldversion < 2020061501.09) {
         // Delete all user evidence files from users that have been deleted.
         $sql = "SELECT DISTINCT f.*
                   FROM {files} f
@@ -2557,25 +2545,11 @@ function xmldb_main_upgrade($oldversion) {
             $fs->get_file_instance($stalefile)->delete();
         }
 
-        upgrade_main_savepoint(true, 2020081400.01);
+        upgrade_main_savepoint(true, 2020061501.09);
     }
 
-    if ($oldversion < 2020081400.02) {
+    if ($oldversion < 2020061501.11) {
 
-        // Define field timecreated to be added to task_adhoc.
-        $table = new xmldb_table('task_adhoc');
-        $field = new xmldb_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0', 'blocking');
-
-        // Conditionally launch add field timecreated.
-        if (!$dbman->field_exists($table, $field)) {
-            $dbman->add_field($table, $field);
-        }
-
-        // Main savepoint reached.
-        upgrade_main_savepoint(true, 2020081400.02);
-    }
-
-    if ($oldversion < 2020082200.01) {
         // Define field metadatasettings to be added to h5p_libraries.
         $table = new xmldb_table('h5p_libraries');
         $field = new xmldb_field('metadatasettings', XMLDB_TYPE_TEXT, null, null, null, null, null, 'coreminor');
@@ -2612,76 +2586,7 @@ function xmldb_main_upgrade($oldversion) {
         }
 
         // Main savepoint reached.
-        upgrade_main_savepoint(true, 2020082200.01);
-    }
-
-    if ($oldversion < 2020082200.02) {
-        // Define fields to be added to task_scheduled.
-        $table = new xmldb_table('task_scheduled');
-        $field = new xmldb_field('timestarted', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'disabled');
-        if (!$dbman->field_exists($table, $field)) {
-            $dbman->add_field($table, $field);
-        }
-        $field = new xmldb_field('hostname', XMLDB_TYPE_CHAR, '255', null, null, null, null, 'timestarted');
-        if (!$dbman->field_exists($table, $field)) {
-            $dbman->add_field($table, $field);
-        }
-        $field = new xmldb_field('pid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'hostname');
-        if (!$dbman->field_exists($table, $field)) {
-            $dbman->add_field($table, $field);
-        }
-
-        // Define fields to be added to task_adhoc.
-        $table = new xmldb_table('task_adhoc');
-        $field = new xmldb_field('timestarted', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'blocking');
-        if (!$dbman->field_exists($table, $field)) {
-            $dbman->add_field($table, $field);
-        }
-        $field = new xmldb_field('hostname', XMLDB_TYPE_CHAR, '255', null, null, null, null, 'timestarted');
-        if (!$dbman->field_exists($table, $field)) {
-            $dbman->add_field($table, $field);
-        }
-        $field = new xmldb_field('pid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'hostname');
-        if (!$dbman->field_exists($table, $field)) {
-            $dbman->add_field($table, $field);
-        }
-
-        // Define fields to be added to task_log.
-        $table = new xmldb_table('task_log');
-        $field = new xmldb_field('hostname', XMLDB_TYPE_CHAR, '255', null, null, null, null, 'output');
-        if (!$dbman->field_exists($table, $field)) {
-            $dbman->add_field($table, $field);
-        }
-        $field = new xmldb_field('pid', XMLDB_TYPE_INTEGER, '10', null, null, null, null, 'hostname');
-        if (!$dbman->field_exists($table, $field)) {
-            $dbman->add_field($table, $field);
-        }
-
-        // Main savepoint reached.
-        upgrade_main_savepoint(true, 2020082200.02);
-    }
-
-    if ($oldversion < 2020082200.03) {
-        // Define table to store virus infected details.
-        $table = new xmldb_table('infected_files');
-
-        // Adding fields to table infected_files.
-        $table->add_field('id', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, XMLDB_SEQUENCE, null);
-        $table->add_field('filename', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null);
-        $table->add_field('quarantinedfile', XMLDB_TYPE_TEXT, null, null, null, null, null);
-        $table->add_field('userid', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, null);
-        $table->add_field('reason', XMLDB_TYPE_TEXT, null, null, XMLDB_NOTNULL, null, null);
-        $table->add_field('timecreated', XMLDB_TYPE_INTEGER, '10', null, XMLDB_NOTNULL, null, '0');
-
-        // Adding keys to table infected_files.
-        $table->add_key('primary', XMLDB_KEY_PRIMARY, ['id']);
-        $table->add_key('userid', XMLDB_KEY_FOREIGN, ['userid'], 'user', ['id']);
-
-        // Conditionally launch create table for infected_files.
-        if (!$dbman->table_exists($table)) {
-            $dbman->create_table($table);
-        }
-        upgrade_main_savepoint(true, 2020082200.03);
+        upgrade_main_savepoint(true, 2020061501.11);
     }
 
     return true;

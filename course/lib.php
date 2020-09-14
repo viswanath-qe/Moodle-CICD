@@ -68,9 +68,6 @@ define('COURSE_DB_QUERY_LIMIT', 1000);
 /** Searching for all courses that have no value for the specified custom field. */
 define('COURSE_CUSTOMFIELD_EMPTY', -1);
 
-// Course activity chooser footer default display option.
-define('COURSE_CHOOSER_FOOTER_NONE', 'hidden');
-
 function make_log_url($module, $url) {
     switch ($module) {
         case 'course':
@@ -637,6 +634,17 @@ function get_category_or_system_context($categoryid) {
     } else {
         return context_system::instance();
     }
+}
+
+/**
+ * Returns the list of full course categories to be used in html_writer::select()
+ *
+ * Calls {@see core_course_category::make_categories_list()} to build the list.
+ *
+ * @return array array mapping course category id to the display name
+ */
+function make_categories_options() {
+    return core_course_category::make_categories_list('', 0, ' / ');
 }
 
 /**
